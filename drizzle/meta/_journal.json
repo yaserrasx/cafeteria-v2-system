@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1772887845053,
+      "tag": "0000_uneven_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1772888110047,
+      "tag": "0001_numerous_virginia_dare",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1772889124891,
+      "tag": "0002_supreme_famine",
+      "breakpoints": true
+    }
+  ]
+}
