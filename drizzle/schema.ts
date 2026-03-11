@@ -1,36 +1,50 @@
 import {
-  int,
-  mysqlEnum,
-  mysqlTable,
+  integer,
+  pgEnum,
+  pgTable,
   text,
   timestamp,
   varchar,
-  decimal,
+  numeric,
   boolean,
   index,
   json,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
 
 /**
- * CAFETERIA V2 - Complete Database Schema
+ * CAFETERIA V2 - Complete Database Schema (PostgreSQL)
  * 18 tables for multi-role cafeteria points management system with recharge-based commissions
  */
 
 // ============================================================================
+// ENUMS
+// ============================================================================
+export const roleEnum = pgEnum("role", ["user", "admin"]);
+export const statusEnum = pgEnum("status", ["pending", "approved", "rejected"]);
+export const distributionStatusEnum = pgEnum("distribution_status", ["pending", "available", "withdrawn"]);
+export const periodTypeEnum = pgEnum("period_type", ["global_first_time", "special_grant"]);
+export const staffRoleEnum = pgEnum("staff_role", ["manager", "waiter", "chef", "cashier"]);
+export const tableStatusEnum = pgEnum("table_status", ["available", "occupied", "reserved", "maintenance"]);
+export const orderStatusEnum = pgEnum("order_status", ["open", "closed", "cancelled"]);
+export const orderItemStatusEnum = pgEnum("order_item_status", ["pending", "sent_to_kitchen", "ready", "served", "cancelled"]);
+export const shiftStatusEnum = pgEnum("shift_status", ["active", "completed", "cancelled"]);
+export const reportTypeEnum = pgEnum("report_type", ["daily", "weekly", "monthly"]);
+
+// ============================================================================
 // 1. USERS TABLE - Authentication & Authorization
 // ============================================================================
-export const users = mysqlTable(
+export const users = pgTable(
   "users",
   {
-    id: int("id").autoincrement().primaryKey(),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     openId: varchar("openId", { length: 64 }).notNull().unique(),
     name: text("name"),
     email: varchar("email", { length: 320 }),
     loginMethod: varchar("loginMethod", { length: 64 }),
-    role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+    role: roleEnum("role").default("user").notNull(),
     preferredLanguage: varchar("preferred_language", { length: 10 }).default("en"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
     lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   },
   (table) => ({
@@ -46,7 +60,7 @@ export type InsertUser = typeof users.$inferInsert;
 // ============================================================================
 // 2. MARKETERS TABLE - Hierarchical Marketer Management
 // ============================================================================
-export const marketers = mysqlTable(
+export const marketers = pgTable(
   "marketers",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -73,14 +87,14 @@ export type InsertMarketer = typeof marketers.$inferInsert;
 // ============================================================================
 // 3. CAFETERIAS TABLE - Cafeteria Management with Points & Grace Mode
 // ============================================================================
-export const cafeterias = mysqlTable(
+export const cafeterias = pgTable(
   "cafeterias",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     marketerId: varchar("marketerId", { length: 36 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     location: varchar("location", { length: 255 }),
-    pointsBalance: decimal("pointsBalance", { precision: 10, scale: 2 }).default("0"),
+    pointsBalance: numeric("pointsBalance", { precision: 10, scale: 2 }).default("0"),
     graceMode: boolean("graceMode").default(false),
     referenceCode: varchar("referenceCode", { length: 50 }).unique(),
     country: varchar("country", { length: 2 }),
@@ -102,13 +116,13 @@ export type InsertCafeteria = typeof cafeterias.$inferInsert;
 // ============================================================================
 // 4. COMMISSION CONFIGS TABLE - Commission Settings
 // ============================================================================
-export const commissionConfigs = mysqlTable(
+export const commissionConfigs = pgTable(
   "commissionConfigs",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     marketerId: varchar("marketerId", { length: 36 }).notNull(),
-    rate: decimal("rate", { precision: 5, scale: 2 }).default("0"),
-    expiryOverrideMonths: int("expiryOverrideMonths"),
+    rate: numeric("rate", { precision: 5, scale: 2 }).default("0"),
+    expiryOverrideMonths: integer("expiryOverrideMonths"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -122,20 +136,20 @@ export type InsertCommissionConfig = typeof commissionConfigs.$inferInsert;
 // ============================================================================
 // 5. RECHARGE REQUESTS TABLE - Recharge Workflow with Image Storage
 // ============================================================================
-export const rechargeRequests = mysqlTable(
+export const rechargeRequests = pgTable(
   "rechargeRequests",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     imageUrl: text("imageUrl"),
-    status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending"),
+    status: statusEnum("status").default("pending"),
     processedAt: timestamp("processedAt"),
     processedBy: varchar("processedBy", { length: 255 }),
     notes: text("notes"),
     commissionCalculated: boolean("commissionCalculated").default(false),
     commissionDistributionId: varchar("commissionDistributionId", { length: 36 }),
-    pointsAddedToBalance: decimal("pointsAddedToBalance", { precision: 10, scale: 2 }).default("0"),
+    pointsAddedToBalance: numeric("pointsAddedToBalance", { precision: 10, scale: 2 }).default("0"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -151,15 +165,15 @@ export type InsertRechargeRequest = typeof rechargeRequests.$inferInsert;
 // ============================================================================
 // 6. MARKETER BALANCES TABLE - Track Pending/Available Commissions
 // ============================================================================
-export const marketerBalances = mysqlTable(
+export const marketerBalances = pgTable(
   "marketerBalances",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     marketerId: varchar("marketerId", { length: 36 }).notNull().unique(),
-    pendingBalance: decimal("pendingBalance", { precision: 15, scale: 2 }).default("0"),
-    availableBalance: decimal("availableBalance", { precision: 15, scale: 2 }).default("0"),
-    totalWithdrawn: decimal("totalWithdrawn", { precision: 15, scale: 2 }).default("0"),
-    lastUpdated: timestamp("lastUpdated").defaultNow().onUpdateNow().notNull(),
+    pendingBalance: numeric("pendingBalance", { precision: 15, scale: 2 }).default("0"),
+    availableBalance: numeric("availableBalance", { precision: 15, scale: 2 }).default("0"),
+    totalWithdrawn: numeric("totalWithdrawn", { precision: 15, scale: 2 }).default("0"),
+    lastUpdated: timestamp("lastUpdated").defaultNow().notNull(),
   },
   (table) => ({
     idxMarketerId: index("idx_marketerId").on(table.marketerId),
@@ -172,15 +186,15 @@ export type InsertMarketerBalance = typeof marketerBalances.$inferInsert;
 // ============================================================================
 // 7. COMMISSION DISTRIBUTIONS TABLE - Track Commission Distribution per Recharge
 // ============================================================================
-export const commissionDistributions = mysqlTable(
+export const commissionDistributions = pgTable(
   "commissionDistributions",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     rechargeRequestId: varchar("rechargeRequestId", { length: 36 }).notNull(),
     marketerId: varchar("marketerId", { length: 36 }).notNull(),
-    level: int("level").notNull(),
-    commissionAmount: decimal("commissionAmount", { precision: 15, scale: 2 }).notNull(),
-    status: mysqlEnum("status", ["pending", "available", "withdrawn"]).default("pending"),
+    level: integer("level").notNull(),
+    commissionAmount: numeric("commissionAmount", { precision: 15, scale: 2 }).notNull(),
+    status: distributionStatusEnum("status").default("pending"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -196,7 +210,7 @@ export type InsertCommissionDistribution = typeof commissionDistributions.$infer
 // ============================================================================
 // 8. CAFETERIA MARKETER RELATIONSHIPS TABLE - Track Commission Lifetime
 // ============================================================================
-export const cafeteriaMarketerRelationships = mysqlTable(
+export const cafeteriaMarketerRelationships = pgTable(
   "cafeteriaMarketerRelationships",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -224,12 +238,12 @@ export type InsertCafeteriaMarketerRelationship = typeof cafeteriaMarketerRelati
 // ============================================================================
 // 9. FREE OPERATION PERIODS TABLE - Track Free Operation Periods
 // ============================================================================
-export const freeOperationPeriods = mysqlTable(
+export const freeOperationPeriods = pgTable(
   "freeOperationPeriods",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    periodType: mysqlEnum("periodType", ["global_first_time", "special_grant"]).notNull(),
+    periodType: periodTypeEnum("periodType").notNull(),
     startDate: timestamp("startDate").notNull(),
     endDate: timestamp("endDate").notNull(),
     reason: text("reason"),
@@ -238,7 +252,6 @@ export const freeOperationPeriods = mysqlTable(
   },
   (table) => ({
     idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxEndDate: index("idx_endDate").on(table.endDate),
   })
 );
 
@@ -246,33 +259,40 @@ export type FreeOperationPeriod = typeof freeOperationPeriods.$inferSelect;
 export type InsertFreeOperationPeriod = typeof freeOperationPeriods.$inferInsert;
 
 // ============================================================================
-// 10. LEDGER ENTRIES TABLE - Financial Transaction Audit Trail
+// 10. SYSTEM CONFIGS TABLE - Global System Settings
 // ============================================================================
-export const ledgerEntries = mysqlTable(
+export const systemConfigs = pgTable(
+  "systemConfigs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    key: varchar("key", { length: 50 }).notNull().unique(),
+    value: text("value").notNull(),
+    description: text("description"),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  }
+);
+
+export type SystemConfig = typeof systemConfigs.$inferSelect;
+export type InsertSystemConfig = typeof systemConfigs.$inferInsert;
+
+// ============================================================================
+// 11. LEDGER ENTRIES TABLE - Audit Trail for All Points Movements
+// ============================================================================
+export const ledgerEntries = pgTable(
   "ledgerEntries",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    type: varchar("type", { length: 50 }).notNull(),
-    ledgerType: mysqlEnum("ledgerType", [
-      "points_deduction",
-      "points_credit",
-      "commission_pending",
-      "commission_available",
-      "commission_withdrawn",
-      "recharge_approval",
-    ]),
+    cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
+    type: varchar("type", { length: 50 }).notNull(), // 'recharge', 'order_deduction', 'manual_adjustment'
+    amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+    balanceBefore: numeric("balanceBefore", { precision: 15, scale: 2 }).notNull(),
+    balanceAfter: numeric("balanceAfter", { precision: 15, scale: 2 }).notNull(),
+    referenceId: varchar("referenceId", { length: 36 }),
     description: text("description"),
-    cafeteriaId: varchar("cafeteriaId", { length: 36 }),
-    marketerId: varchar("marketerId", { length: 36 }),
-    amount: decimal("amount", { precision: 10, scale: 2 }),
-    refId: varchar("refId", { length: 36 }),
-    relatedMarketerIds: json("relatedMarketerIds"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxType: index("idx_type").on(table.type),
     idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxMarketerId: index("idx_marketerId").on(table.marketerId),
     idxCreatedAt: index("idx_createdAt").on(table.createdAt),
   })
 );
@@ -281,34 +301,15 @@ export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
 
 // ============================================================================
-// 11. SYSTEM CONFIGS TABLE - System-wide Configuration
+// 12. SECTIONS TABLE - Cafeteria Sections
 // ============================================================================
-export const systemConfigs = mysqlTable(
-  "systemConfigs",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    key: varchar("key", { length: 255 }).notNull().unique(),
-    value: text("value"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  (table) => ({
-    idxKey: index("idx_key").on(table.key),
-  })
-);
-
-export type SystemConfig = typeof systemConfigs.$inferSelect;
-export type InsertSystemConfig = typeof systemConfigs.$inferInsert;
-
-// ============================================================================
-// 12. SECTIONS TABLE - Table Groupings within Cafeteria
-// ============================================================================
-export const sections = mysqlTable(
+export const sections = pgTable(
   "sections",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
-    displayOrder: int("displayOrder").default(0),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -320,18 +321,19 @@ export type Section = typeof sections.$inferSelect;
 export type InsertSection = typeof sections.$inferInsert;
 
 // ============================================================================
-// 13. CAFETERIA TABLES TABLE - Table Management
+// 13. CAFETERIA TABLES TABLE - Physical Tables with QR Tokens
 // ============================================================================
-export const cafeteriaTables = mysqlTable(
+export const cafeteriaTables = pgTable(
   "cafeteriaTables",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    sectionId: varchar("sectionId", { length: 36 }),
-    tableNumber: int("tableNumber").notNull(),
-    capacity: int("capacity"),
-    status: varchar("status", { length: 50 }).default("available"),
-    tableToken: varchar("tableToken", { length: 64 }).unique(),
+    sectionId: varchar("sectionId", { length: 36 }).notNull(),
+    tableNumber: varchar("tableNumber", { length: 20 }).notNull(),
+    capacity: integer("capacity").default(4),
+    status: tableStatusEnum("status").default("available"),
+    tableToken: varchar("tableToken", { length: 50 }).unique(),
+    qrCodeUrl: text("qrCodeUrl"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
@@ -345,69 +347,76 @@ export type CafeteriaTable = typeof cafeteriaTables.$inferSelect;
 export type InsertCafeteriaTable = typeof cafeteriaTables.$inferInsert;
 
 // ============================================================================
-// 14. STAFF SECTION ASSIGNMENTS TABLE - Waiter to Section Assignments
+// 14. CAFETERIA STAFF TABLE - Staff Management
 // ============================================================================
-export const staffSectionAssignments = mysqlTable(
+export const cafeteriaStaff = pgTable(
+  "cafeteriaStaff",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
+    openId: varchar("openId", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    role: staffRoleEnum("role").notNull(),
+    isActive: boolean("isActive").default(true),
+    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
+    idxOpenId: index("idx_staff_openId").on(table.openId),
+  })
+);
+
+export type Staff = typeof cafeteriaStaff.$inferSelect;
+export type InsertStaff = typeof cafeteriaStaff.$inferInsert;
+
+// ============================================================================
+// 15. STAFF SECTION ASSIGNMENTS TABLE - Waiter-to-Section Mapping
+// ============================================================================
+export const staffSectionAssignments = pgTable(
   "staffSectionAssignments",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     staffId: varchar("staffId", { length: 36 }).notNull(),
     sectionId: varchar("sectionId", { length: 36 }).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxStaffId: index("idx_staffId").on(table.staffId),
-    idxSectionId: index("idx_sectionId").on(table.sectionId),
-    uniqueStaffSection: index("unique_staff_section").on(table.staffId, table.sectionId),
+    idxStaffId: index("idx_staff_section_staffId").on(table.staffId),
+    idxSectionId: index("idx_staff_section_sectionId").on(table.sectionId),
   })
 );
 
-export type StaffSectionAssignment = typeof staffSectionAssignments.$inferSelect;
-export type InsertStaffSectionAssignment = typeof staffSectionAssignments.$inferInsert;
-
 // ============================================================================
-// 15. CAFETERIA STAFF TABLE - Staff Management with Login Permissions
+// 16. STAFF CATEGORY ASSIGNMENTS TABLE - Chef-to-Category Mapping
 // ============================================================================
-export const cafeteriaStaff = mysqlTable(
-  "cafeteriaStaff",
+export const staffCategoryAssignments = pgTable(
+  "staffCategoryAssignments",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
-    role: varchar("role", { length: 50 }),
-    status: varchar("status", { length: 50 }).default("active"),
-    canLogin: boolean("canLogin").default(false),
-    permissions: json("permissions"),
-    loginPermissionGrantedAt: timestamp("loginPermissionGrantedAt"),
-    loginPermissionGrantedBy: varchar("loginPermissionGrantedBy", { length: 36 }),
-    lastLoginAt: timestamp("lastLoginAt"),
-    country: varchar("country", { length: 2 }),
-    currency: varchar("currency", { length: 3 }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    staffId: varchar("staffId", { length: 36 }).notNull(),
+    categoryId: varchar("categoryId", { length: 36 }).notNull(),
+    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxCanLogin: index("idx_canLogin").on(table.canLogin),
+    idxStaffId: index("idx_staff_category_staffId").on(table.staffId),
+    idxCategoryId: index("idx_staff_category_categoryId").on(table.categoryId),
   })
 );
 
-export type CafeteriaStaff = typeof cafeteriaStaff.$inferSelect;
-export type InsertCafeteriaStaff = typeof cafeteriaStaff.$inferInsert;
-
 // ============================================================================
-// 16. MENU CATEGORIES TABLE - Menu Organization
+// 17. MENU CATEGORIES TABLE - Food Categories
 // ============================================================================
-export const menuCategories = mysqlTable(
+export const menuCategories = pgTable(
   "menuCategories",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
-    displayOrder: int("displayOrder").default(0),
+    name: varchar("name", { length: 100 }).notNull(),
+    displayOrder: integer("displayOrder").default(0),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
+    idxCafeteriaId: index("idx_menu_category_cafeteriaId").on(table.cafeteriaId),
   })
 );
 
@@ -415,42 +424,25 @@ export type MenuCategory = typeof menuCategories.$inferSelect;
 export type InsertMenuCategory = typeof menuCategories.$inferInsert;
 
 // ============================================================================
-// 17. STAFF CATEGORY ASSIGNMENTS TABLE - Chef to Prep Category Assignments
+// 18. MENU ITEMS TABLE - Food & Drink Items
 // ============================================================================
-export const staffCategoryAssignments = mysqlTable(
-  "staffCategoryAssignments",
-  {
-    id: varchar("id", { length: 36 }).primaryKey(),
-    staffId: varchar("staffId", { length: 36 }).notNull(),
-    categoryId: varchar("categoryId", { length: 36 }).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  (table) => ({
-    idxStaffId: index("idx_staffId").on(table.staffId),
-    idxCategoryId: index("idx_categoryId").on(table.categoryId),
-    uniqueStaffCategory: index("unique_staff_category").on(table.staffId, table.categoryId),
-  })
-);
-
-export type StaffCategoryAssignment = typeof staffCategoryAssignments.$inferSelect;
-export type InsertStaffCategoryAssignment = typeof staffCategoryAssignments.$inferInsert;
-
-// ============================================================================
-// 18. MENU ITEMS TABLE - Individual Menu Items
-// ============================================================================
-export const menuItems = mysqlTable(
+export const menuItems = pgTable(
   "menuItems",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
+    cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
     categoryId: varchar("categoryId", { length: 36 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
-    price: decimal("price", { precision: 10, scale: 2 }),
-    available: boolean("available").default(true),
+    price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+    pointsCost: numeric("pointsCost", { precision: 10, scale: 2 }).notNull(),
+    imageUrl: text("imageUrl"),
+    isAvailable: boolean("isAvailable").default(true),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxCategoryId: index("idx_categoryId").on(table.categoryId),
+    idxCafeteriaId: index("idx_menu_item_cafeteriaId").on(table.cafeteriaId),
+    idxCategoryId: index("idx_menu_item_categoryId").on(table.categoryId),
   })
 );
 
@@ -458,28 +450,26 @@ export type MenuItem = typeof menuItems.$inferSelect;
 export type InsertMenuItem = typeof menuItems.$inferInsert;
 
 // ============================================================================
-// 19. ORDERS TABLE - Order Tracking with Points Consumption
+// 19. ORDERS TABLE - Customer Orders
 // ============================================================================
-export const orders = mysqlTable(
+export const orders = pgTable(
   "orders",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    tableId: varchar("tableId", { length: 36 }),
+    tableId: varchar("tableId", { length: 36 }).notNull(),
     waiterId: varchar("waiterId", { length: 36 }),
-    totalAmount: decimal("totalAmount", { precision: 10, scale: 2 }),
-    status: varchar("status", { length: 50 }).default("open"),
-    pointsConsumed: decimal("pointsConsumed", { precision: 10, scale: 2 }).default("0"),
-    source: varchar("source", { length: 50 }).default("staff"),
+    status: orderStatusEnum("status").default("open"),
+    totalAmount: numeric("totalAmount", { precision: 10, scale: 2 }).default("0"),
+    totalPoints: numeric("totalPoints", { precision: 10, scale: 2 }).default("0"),
+    source: varchar("source", { length: 20 }).default("waiter"), // 'waiter' or 'customer'
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     closedAt: timestamp("closedAt"),
   },
   (table) => ({
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxStatus: index("idx_status").on(table.status),
-    idxSource: index("idx_source").on(table.source),
-    idxCreatedAt: index("idx_createdAt").on(table.createdAt),
-    idxClosedAt: index("idx_closedAt").on(table.closedAt),
+    idxCafeteriaId: index("idx_order_cafeteriaId").on(table.cafeteriaId),
+    idxTableId: index("idx_order_tableId").on(table.tableId),
+    idxStatus: index("idx_order_status").on(table.status),
   })
 );
 
@@ -487,18 +477,18 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
 
 // ============================================================================
-// 20. ORDER ITEMS TABLE - Individual Items in Orders
+// 20. ORDER ITEMS TABLE - Items within an Order
 // ============================================================================
-export const orderItems = mysqlTable(
+export const orderItems = pgTable(
   "orderItems",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     orderId: varchar("orderId", { length: 36 }).notNull(),
     menuItemId: varchar("menuItemId", { length: 36 }).notNull(),
-    quantity: int("quantity").notNull().default(1),
-    unitPrice: decimal("unitPrice", { precision: 10, scale: 2 }).notNull(),
-    totalPrice: decimal("totalPrice", { precision: 10, scale: 2 }).notNull(),
-    status: mysqlEnum("status", ["pending", "sent_to_kitchen", "in_preparation", "ready", "served", "cancelled"]).default("pending"),
+    quantity: integer("quantity").notNull(),
+    unitPrice: numeric("unitPrice", { precision: 10, scale: 2 }).notNull(),
+    unitPoints: numeric("unitPoints", { precision: 10, scale: 2 }).notNull(),
+    status: orderItemStatusEnum("status").default("pending"),
     sentToKitchenAt: timestamp("sentToKitchenAt"),
     readyAt: timestamp("readyAt"),
     servedAt: timestamp("servedAt"),
@@ -506,9 +496,9 @@ export const orderItems = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxOrderId: index("idx_orderId").on(table.orderId),
-    idxMenuItemId: index("idx_menuItemId").on(table.menuItemId),
-    idxStatus: index("idx_status").on(table.status),
+    idxOrderId: index("idx_orderItem_orderId").on(table.orderId),
+    idxMenuItemId: index("idx_orderItem_menuItemId").on(table.menuItemId),
+    idxStatus: index("idx_orderItem_status").on(table.status),
   })
 );
 
@@ -518,7 +508,7 @@ export type InsertOrderItem = typeof orderItems.$inferInsert;
 // ============================================================================
 // 21. SHIFTS TABLE - Staff Shift Tracking
 // ============================================================================
-export const shifts = mysqlTable(
+export const shifts = pgTable(
   "shifts",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -526,17 +516,17 @@ export const shifts = mysqlTable(
     staffId: varchar("staffId", { length: 36 }).notNull(),
     startTime: timestamp("startTime").notNull(),
     endTime: timestamp("endTime"),
-    status: mysqlEnum("status", ["active", "completed", "cancelled"]).default("active"),
-    totalSales: decimal("totalSales", { precision: 15, scale: 2 }).default("0"),
-    totalOrders: int("totalOrders").default(0),
-    totalItemsSold: int("totalItemsSold").default(0),
+    status: shiftStatusEnum("status").default("active"),
+    totalSales: numeric("totalSales", { precision: 15, scale: 2 }).default("0"),
+    totalOrders: integer("totalOrders").default(0),
+    totalItemsSold: integer("totalItemsSold").default(0),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxStaffId: index("idx_staffId").on(table.staffId),
-    idxStatus: index("idx_status").on(table.status),
-    idxStartTime: index("idx_startTime").on(table.startTime),
+    idxCafeteriaId: index("idx_shift_cafeteriaId").on(table.cafeteriaId),
+    idxStaffId: index("idx_shift_staffId").on(table.staffId),
+    idxStatus: index("idx_shift_status").on(table.status),
+    idxStartTime: index("idx_shift_startTime").on(table.startTime),
   })
 );
 
@@ -546,19 +536,19 @@ export type InsertShift = typeof shifts.$inferInsert;
 // ============================================================================
 // 22. SHIFT SALES TABLE - Sales Tracking per Shift
 // ============================================================================
-export const shiftSales = mysqlTable(
+export const shiftSales = pgTable(
   "shiftSales",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     shiftId: varchar("shiftId", { length: 36 }).notNull(),
     orderId: varchar("orderId", { length: 36 }).notNull(),
-    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-    pointsDeducted: decimal("pointsDeducted", { precision: 10, scale: 2 }).notNull(),
+    amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+    pointsDeducted: numeric("pointsDeducted", { precision: 10, scale: 2 }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxShiftId: index("idx_shiftId").on(table.shiftId),
-    idxOrderId: index("idx_orderId").on(table.orderId),
+    idxShiftId: index("idx_shiftSale_shiftId").on(table.shiftId),
+    idxOrderId: index("idx_shiftSale_orderId").on(table.orderId),
   })
 );
 
@@ -568,24 +558,24 @@ export type InsertShiftSale = typeof shiftSales.$inferInsert;
 // ============================================================================
 // 23. CAFETERIA REPORTS TABLE - Daily/Period Reports
 // ============================================================================
-export const cafeteriaReports = mysqlTable(
+export const cafeteriaReports = pgTable(
   "cafeteriaReports",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
-    reportType: mysqlEnum("reportType", ["daily", "weekly", "monthly"]).notNull(),
+    reportType: reportTypeEnum("reportType").notNull(),
     reportDate: timestamp("reportDate").notNull(),
-    totalSales: decimal("totalSales", { precision: 15, scale: 2 }).default("0"),
-    totalOrders: int("totalOrders").default(0),
-    totalItemsSold: int("totalItemsSold").default(0),
-    totalPointsDeducted: decimal("totalPointsDeducted", { precision: 15, scale: 2 }).default("0"),
-    averageOrderValue: decimal("averageOrderValue", { precision: 10, scale: 2 }).default("0"),
+    totalSales: numeric("totalSales", { precision: 15, scale: 2 }).default("0"),
+    totalOrders: integer("totalOrders").default(0),
+    totalItemsSold: integer("totalItemsSold").default(0),
+    totalPointsDeducted: numeric("totalPointsDeducted", { precision: 15, scale: 2 }).default("0"),
+    averageOrderValue: numeric("averageOrderValue", { precision: 10, scale: 2 }).default("0"),
     generatedAt: timestamp("generatedAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxReportType: index("idx_reportType").on(table.reportType),
-    idxReportDate: index("idx_reportDate").on(table.reportDate),
+    idxCafeteriaId: index("idx_report_cafeteriaId").on(table.cafeteriaId),
+    idxReportType: index("idx_report_reportType").on(table.reportType),
+    idxReportDate: index("idx_report_reportDate").on(table.reportDate),
   })
 );
 
@@ -595,25 +585,25 @@ export type InsertCafeteriaReport = typeof cafeteriaReports.$inferInsert;
 // ============================================================================
 // 24. STAFF PERFORMANCE TABLE - Staff Performance Metrics
 // ============================================================================
-export const staffPerformance = mysqlTable(
+export const staffPerformance = pgTable(
   "staffPerformance",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     staffId: varchar("staffId", { length: 36 }).notNull(),
     cafeteriaId: varchar("cafeteriaId", { length: 36 }).notNull(),
     reportDate: timestamp("reportDate").notNull(),
-    totalShifts: int("totalShifts").default(0),
-    totalSales: decimal("totalSales", { precision: 15, scale: 2 }).default("0"),
-    totalOrders: int("totalOrders").default(0),
-    averageOrderValue: decimal("averageOrderValue", { precision: 10, scale: 2 }).default("0"),
-    totalItemsSold: int("totalItemsSold").default(0),
-    totalHoursWorked: decimal("totalHoursWorked", { precision: 8, scale: 2 }).default("0"),
+    totalShifts: integer("totalShifts").default(0),
+    totalSales: numeric("totalSales", { precision: 15, scale: 2 }).default("0"),
+    totalOrders: integer("totalOrders").default(0),
+    averageOrderValue: numeric("averageOrderValue", { precision: 10, scale: 2 }).default("0"),
+    totalItemsSold: integer("totalItemsSold").default(0),
+    totalHoursWorked: numeric("totalHoursWorked", { precision: 8, scale: 2 }).default("0"),
     generatedAt: timestamp("generatedAt").defaultNow().notNull(),
   },
   (table) => ({
-    idxStaffId: index("idx_staffId").on(table.staffId),
-    idxCafeteriaId: index("idx_cafeteriaId").on(table.cafeteriaId),
-    idxReportDate: index("idx_reportDate").on(table.reportDate),
+    idxStaffId: index("idx_staffPerf_staffId").on(table.staffId),
+    idxCafeteriaId: index("idx_staffPerf_cafeteriaId").on(table.cafeteriaId),
+    idxReportDate: index("idx_staffPerf_reportDate").on(table.reportDate),
   })
 );
 
@@ -624,22 +614,21 @@ export type InsertStaffPerformance = typeof staffPerformance.$inferInsert;
 // ============================================================================
 // 25. WITHDRAWAL REQUESTS TABLE - Marketer Withdrawal Workflow
 // ============================================================================
-expor
-t const withdrawalRequests = mysqlTable(
+export const withdrawalRequests = pgTable(
   "withdrawalRequests",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     marketerId: varchar("marketerId", { length: 36 }).notNull(),
-    amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-    status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending"),
+    amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+    status: statusEnum("status").default("pending"),
     requestedAt: timestamp("requestedAt").defaultNow().notNull(),
     processedAt: timestamp("processedAt"),
     processedBy: varchar("processedBy", { length: 255 }),
     notes: text("notes"),
   },
   (table) => ({
-    idxMarketerId: index("idx_marketerId").on(table.marketerId),
-    idxStatus: index("idx_status").on(table.status),
+    idxMarketerId: index("idx_withdrawal_marketerId").on(table.marketerId),
+    idxStatus: index("idx_withdrawal_status").on(table.status),
   })
 );
 
